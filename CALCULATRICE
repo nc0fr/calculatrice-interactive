@@ -1,0 +1,271 @@
+#!/usr/bin/python3
+# Copyright (c) 2024 Nicolas Paul.  All rights reserved.
+
+# This is a simple REPL program which allow the user to enter very simple
+# binary operations and get the result interactively.
+
+from os import EX_OK, EX_SOFTWARE
+
+# ANSI escape codes for colors
+RESET  = '\033[0m'
+BOLD   = '\033[1m'
+RED    = '\033[31m'
+GREEN  = '\033[32m'
+BLUE   = '\033[34m'
+PURPLE = '\033[35m'
+
+def bold(text):
+    """Return the given text in bold."""
+    return f'{BOLD}{text}{RESET}'
+
+
+def red(text):
+    """Return the given text in red."""
+    return f'{RED}{text}{RESET}'
+
+
+def green(text):
+    """Return the given text in green."""
+    return f'{GREEN}{text}{RESET}'
+
+
+def blue(text):
+    """Return the given text in blue."""
+    return f'{BLUE}{text}{RESET}'
+
+
+def purple(text):
+    """Return the given text in purple."""
+    return f'{PURPLE}{text}{RESET}'
+
+
+# Calculator
+
+class CalcError(Exception):
+    """Base class for calculator errors.
+
+    A CalcError represents an error that occurred during the evaluation of an
+    expression.  It can be raised due to invalid input, division by zero, or
+    something else.
+
+    Attributes:
+        code(str): A short error code, e.g. 'DIV0'.
+        description(str): A human-readable description of the error.
+        expression(str): The expression that caused the error.
+        details(str): Additional details about the error.
+    """
+
+    def __init__(self, code, description, expression, details):
+        """Initialize a new CalcError with the given attributes."""
+        self.code = code
+        self.description = description
+        self.expression = expression
+        self.details = details
+
+
+# Error codes
+ERR_EVAL = 'EVALUATION_ERROR'
+ERR_SYNTAX = 'SYNTAX_ERROR'
+
+ERR_EMPTY_EXPRESSION           = 'L\'expression ne peut pas être vide.'
+ERR_INVALID_EXPRESSION         = 'L\'expression n\'est pas valide.'
+ERR_UNSUPPORTED_OPERATION      = 'L\'opération n\'est pas supportée.'
+ERR_DIVISION_BY_ZERO           = 'La division par zéro est interdite.'
+ERR_POWER_NEGATIVE_EXPONENT    = 'La puissance d\'un nombre négatif par ' +    \
+                                 'un exposant non entier n\'est pas définie.'
+ERR_POWER_NON_INTEGER_EXPONENT = 'La puissance d\'un nombre par un exposant ' +\
+                                 'non entier n\'est pas définie.'
+ERR_ZERO_POWER_ZERO            = 'La puissance de zéro par zéro n\'est pas ' + \
+                                 'définie.'
+
+# Operations
+ADD = '+'
+SUB = '-'
+MUL = '*'
+DIV = '/'
+POW = '^'
+EQL = '='
+OPERATIONS = (ADD, SUB, MUL, DIV, POW, EQL)
+
+def add(a, b):
+    return a + b
+
+
+def sub(a, b):
+    return a - b
+
+
+def mul(a, b):
+    return a * b
+
+
+def div(a, b, expr):
+    if b == 0 or b == .0:
+        raise CalcError(code=ERR_EVAL,
+                        description='Division par zéro',
+                        expression=expr,
+                        details=ERR_DIVISION_BY_ZERO)
+
+    return a / b
+
+
+def pow(a, b, expr):
+    if a == 0 and b == 0:
+        raise CalcError(code=ERR_EVAL,
+                        description='0^0',
+                        expression=expr,
+                        details=ERR_ZERO_POWER_ZERO)
+
+
+    if a < 0 and not isinstance(b, int):
+        raise CalcError(code=ERR_EVAL,
+                        description='Puissance d\'un nombre négatif par un ' +
+                                    'exposant non entier',
+                        expression=expr,
+                        details=ERR_POWER_NEGATIVE_EXPONENT)
+
+    if b < 0:
+        return 1 / (a ** abs(b))
+
+    return a ** b
+
+
+def eql(a, b):
+    return "Oui" if a == b else "Non"
+
+
+def evaluate(op, a, b, expr):
+    """Evaluate the given operation with the two operands."""
+    if   op == ADD:
+        return add(a, b)
+    elif op == SUB:
+        return sub(a, b)
+    elif op == MUL:
+        return mul(a, b)
+    elif op == DIV:
+        return div(a, b, expr)
+    elif op == POW:
+        return pow(a, b, expr)
+    elif op == EQL:
+        return eql(a, b)
+    else:
+        raise CalcError(code=ERR_EVAL,
+                        description='Opération non supportée',
+                        expression=expr,
+                        details=ERR_UNSUPPORTED_OPERATION)
+
+
+def parse(expr: str):
+    """Parse supported mathematical operations."""
+    expr = expr.strip()
+    if not expr:
+        raise CalcError(code=ERR_SYNTAX,
+                        description='Expression vide',
+                        expression=expr,
+                        details=ERR_EMPTY_EXPRESSION)
+
+    # Split the expression into two operands and an operator.
+    # We only support binary operations for now.
+
+    for op in OPERATIONS:
+        if op in expr:
+            a, op, b = expr.partition(op)
+            a = a.strip()
+            b = b.strip()
+            op = op.strip()
+
+            try:
+                a = float(a)
+                b = float(b)
+            except ValueError:
+                raise CalcError(code=ERR_SYNTAX,
+                                description='Expression invalide',
+                                expression=expr,
+                                details=ERR_INVALID_EXPRESSION)
+
+            return evaluate(op, a, b, expr)
+
+    raise CalcError(code=ERR_SYNTAX,
+                    description='Opération non supportée',
+                    expression=expr,
+                    details=ERR_INVALID_EXPRESSION)
+
+
+# REPL
+
+WELCOME = f'''Bienvenue dans la calculatrice interactive!
+Entrez {green('aide')} pour obtenir de l'aide, ou {green('quitter')} pour
+quitter.'''
+
+HELP = f'''Ceci est une calculatrice interactive.  Vous pouvez entrer des
+expressions simples et obtenir le résultat.  Les opérations supportées sont :
+
+  *  l'addition ({green('a')} {bold(green('+'))} {green('b')}) ;
+  *  la soustraction ({green('a')} {bold(green('-'))} {green('b')}) ;
+  *  la multiplication ({green('a')} {bold(green('*'))} {green('b')}) ;
+  *  la division ({green('a')} {bold(green('/'))} {green('b')}) ;
+  *  la puissance ({green('a')} {bold(green('^'))} {green('b')}) ; et
+  *  l'égalité ({green('a')} {bold(green('='))} {green('b')}).
+
+Vous pouvez aussi entrer {green('aide')} pour obtenir ce menu d'aide,
+ou {green('quitter')} pour quitter la calculatrice.'''
+
+EXIT = 'Au revoir!'
+
+PROMPT = 'calc> '
+"""Prompt for the calculator REPL."""
+
+AIDE = 'aide'
+"""Command to get help."""
+QUITTER = 'quitter'
+"""Command to quit the REPL."""
+
+def eprint(error: CalcError):
+    """Print an error message.
+
+    Args:
+        error(CalcError): The error to print.
+    """
+    print(f'{bold("Erreur")} {red(error.code)}: {error.description}')
+    print()
+    print('\t' + green(error.expression))
+    print('\t' + purple('^' * len(error.expression)))
+    print('\t' + purple('│'))
+    print('\t' + purple('└── ') + error.details)
+    print()
+    print(blue(bold('Conseil') + ': Entrez ' + green('\'aide\'') + ' pour ' +
+               'consulter le manuel.'))
+
+
+def read():
+    """Main REPL loop."""
+    print(WELCOME)
+
+    i = 0  # REPL iteration counter
+    while True:
+        i += 1
+        expr = input(f'{purple(i)} {PROMPT}')
+
+        if expr == QUITTER:
+            break
+
+        if expr == AIDE:
+            print(HELP)
+            continue
+
+        try:
+            print(parse(expr))
+        except CalcError as e:
+            eprint(e)
+            continue
+        except Exception as e:
+            print(e)
+            return EX_SOFTWARE
+
+    print(EXIT)
+    return EX_OK
+
+
+if __name__ == '__main__':
+    exit(read())
+
